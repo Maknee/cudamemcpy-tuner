@@ -1,0 +1,202 @@
+[
+  {
+    "name": "vllm-startup-warm",
+    "group": "inference",
+    "description": "vLLM 0.33 offline engine, Qwen3.5-9B (8k context, text only), compile caches kept from the warm-up run (a restarted server): process start to first token. Weight load = 19 GB pageable CPU->GPU, one copy per tensor.",
+    "needs": {"gpu_gib": 22, "host_gib": 24, "disk_gib": 25},
+    "setup": ["bash", "evaluation/workloads/setup.sh", "vllm", "hf:Qwen/Qwen3.5-9B"],
+    "run": {"argv": ["${CMT_ENV_ROOT}/vllm/bin/python", "evaluation/workloads/engines.py", "--op", "startup", "--engine", "vllm", "--caches", "warm"], "env": {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "HF_HUB_OFFLINE": "1"}},
+    "repeats": 3,
+    "metric": {"name": "first_token_seconds", "unit": "s", "better": "lower"}
+  },
+  {
+    "name": "vllm-startup-cold",
+    "group": "inference",
+    "description": "vLLM 0.33 offline engine, Qwen3.5-9B (8k context, text only), empty compile caches every run (a fresh container: compile and kernel builds included): process start to first token. Weight load = 19 GB pageable CPU->GPU, one copy per tensor.",
+    "needs": {"gpu_gib": 22, "host_gib": 24, "disk_gib": 25},
+    "setup": ["bash", "evaluation/workloads/setup.sh", "vllm", "hf:Qwen/Qwen3.5-9B"],
+    "run": {"argv": ["${CMT_ENV_ROOT}/vllm/bin/python", "evaluation/workloads/engines.py", "--op", "startup", "--engine", "vllm", "--caches", "cold"], "env": {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "HF_HUB_OFFLINE": "1"}},
+    "repeats": 3,
+    "metric": {"name": "first_token_seconds", "unit": "s", "better": "lower"}
+  },
+  {
+    "name": "sglang-startup-warm",
+    "group": "inference",
+    "description": "SGLang 0.5.23 offline engine, Qwen3.5-9B (8k context, text only), compile caches kept from the warm-up run (a restarted server): process start to first token. Copies happen in the scheduler child process (not traced).",
+    "needs": {"gpu_gib": 22, "host_gib": 24, "disk_gib": 25},
+    "setup": ["bash", "evaluation/workloads/setup.sh", "sglang", "hf:Qwen/Qwen3.5-9B"],
+    "run": {"argv": ["${CMT_ENV_ROOT}/sglang/bin/python", "evaluation/workloads/engines.py", "--op", "startup", "--engine", "sglang", "--caches", "warm"], "env": {"HF_HUB_OFFLINE": "1"}},
+    "repeats": 3,
+    "metric": {"name": "first_token_seconds", "unit": "s", "better": "lower"}
+  },
+  {
+    "name": "sglang-startup-cold",
+    "group": "inference",
+    "description": "SGLang 0.5.23 offline engine, Qwen3.5-9B (8k context, text only), empty compile caches every run (a fresh container: compile and kernel builds included): process start to first token. Copies happen in the scheduler child process (not traced).",
+    "needs": {"gpu_gib": 22, "host_gib": 24, "disk_gib": 25},
+    "setup": ["bash", "evaluation/workloads/setup.sh", "sglang", "hf:Qwen/Qwen3.5-9B"],
+    "run": {"argv": ["${CMT_ENV_ROOT}/sglang/bin/python", "evaluation/workloads/engines.py", "--op", "startup", "--engine", "sglang", "--caches", "cold"], "env": {"HF_HUB_OFFLINE": "1"}},
+    "repeats": 3,
+    "metric": {"name": "first_token_seconds", "unit": "s", "better": "lower"}
+  },
+  {
+    "name": "sglang-rl-disk-update",
+    "group": "inference",
+    "description": "SGLang 0.5.23 RL weight sync from disk as slime does it (update_weights_from_disk, flush_cache), Qwen3.5-9B (8k context, text only): seconds per full reload of a 19.3 GB checkpoint whose files are in the page cache. Each update copies every loaded tensor pageable (mmap) CPU->GPU: 18.8 GB, counted apart from the file bytes by SGLang's profiler on one extra update, which also splits copy time from SGLang's per-tensor Python. A trainer stand-in writes checkpoints A and B (untimed; the lm_head shard rewritten with two rows swapped, the other shards shared); 5 alternating updates per run, each verified by greedy generation. Copies happen in the scheduler child process (not traced).",
+    "needs": {"gpu_gib": 22, "host_gib": 36, "disk_gib": 36},
+    "setup": ["bash", "evaluation/workloads/setup.sh", "sglang", "hf:Qwen/Qwen3.5-9B"],
+    "run": {"argv": ["${CMT_ENV_ROOT}/sglang/bin/python", "evaluation/workloads/engines.py", "--op", "rl-disk-update", "--engine", "sglang", "--dir", "${CMT_ENV_ROOT}"], "env": {"HF_HUB_OFFLINE": "1"}},
+    "repeats": 3,
+    "metric": {"name": "rl_disk_update_seconds", "unit": "s", "better": "lower"}
+  },
+  {
+    "name": "vllm-sleep-l1",
+    "group": "inference",
+    "description": "vLLM sleep level 1 x3 cycles (RL rollout pattern), Qwen3.5-9B. Weights backed up to pinned CPU memory: all weights GPU->CPU and back per cycle; the first sleep pins ~1.3x the weight bytes.",
+    "needs": {"gpu_gib": 22, "host_gib": 40, "disk_gib": 25},
+    "setup": ["bash", "evaluation/workloads/setup.sh", "vllm", "hf:Qwen/Qwen3.5-9B"],
+    "run": {"argv": ["${CMT_ENV_ROOT}/vllm/bin/python", "evaluation/workloads/engines.py", "--op", "sleep", "--level", "1"], "env": {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "HF_HUB_OFFLINE": "1"}},
+    "repeats": 3,
+    "metric": {"name": "sleep1_cycle_seconds", "unit": "s", "better": "lower"}
+  },
+  {
+    "name": "vllm-sleep-l1-pageable",
+    "group": "inference",
+    "description": "The same sleep level 1 x3 cycles with the weight backup in pageable memory, vLLM's default under WSL2 (pin_memory off unless VLLM_WSL2_ENABLE_PIN_MEMORY=1): each sleep copies the weights GPU->CPU into fresh pageable memory and each wake copies them back.",
+    "needs": {"gpu_gib": 22, "host_gib": 40, "disk_gib": 25},
+    "setup": ["bash", "evaluation/workloads/setup.sh", "vllm", "hf:Qwen/Qwen3.5-9B"],
+    "run": {"argv": ["${CMT_ENV_ROOT}/vllm/bin/python", "evaluation/workloads/engines.py", "--op", "sleep", "--level", "1", "--backup", "pageable"], "env": {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "HF_HUB_OFFLINE": "1"}},
+    "repeats": 3,
+    "metric": {"name": "sleep1_cycle_seconds", "unit": "s", "better": "lower"}
+  },
+  {
+    "name": "vllm-sleep-l2",
+    "group": "inference",
+    "description": "vLLM sleep level 2 + reload_weights x3 cycles, Qwen3.5-9B. Each reload copies the 19 GB of safetensors pageable CPU->GPU.",
+    "needs": {"gpu_gib": 22, "host_gib": 24, "disk_gib": 25},
+    "setup": ["bash", "evaluation/workloads/setup.sh", "vllm", "hf:Qwen/Qwen3.5-9B"],
+    "run": {"argv": ["${CMT_ENV_ROOT}/vllm/bin/python", "evaluation/workloads/engines.py", "--op", "sleep", "--level", "2"], "env": {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "HF_HUB_OFFLINE": "1"}},
+    "repeats": 3,
+    "metric": {"name": "sleep2_cycle_seconds", "unit": "s", "better": "lower"}
+  },
+  {
+    "name": "hf-load",
+    "group": "inference",
+    "description": "Transformers from_pretrained(device_map='cuda'), Qwen3-8B bf16: 16.4 GB pageable (mmap) CPU->GPU, one copy per tensor.",
+    "needs": {"gpu_gib": 22, "host_gib": 24, "disk_gib": 25},
+    "setup": ["bash", "evaluation/workloads/setup.sh", "torch", "hf:Qwen/Qwen3-8B"],
+    "run": {"argv": ["${CMT_ENV_ROOT}/torch/bin/python", "evaluation/workloads/hf.py", "--op", "load"], "env": {"HF_HUB_OFFLINE": "1"}},
+    "repeats": 3,
+    "metric": {"name": "load_seconds", "unit": "s", "better": "lower"}
+  },
+  {
+    "name": "hf-offload",
+    "group": "inference",
+    "description": "Transformers big-model inference (device_map='auto', 3 GiB GPU budget), Qwen3-8B: every token streams the CPU-resident layers as pageable CPU->GPU copies.",
+    "needs": {"gpu_gib": 6, "host_gib": 32, "disk_gib": 25},
+    "setup": ["bash", "evaluation/workloads/setup.sh", "torch", "hf:Qwen/Qwen3-8B"],
+    "run": {"argv": ["${CMT_ENV_ROOT}/torch/bin/python", "evaluation/workloads/hf.py", "--op", "offload"], "env": {"HF_HUB_OFFLINE": "1"}},
+    "repeats": 3,
+    "metric": {"name": "seconds_per_token", "unit": "s/token", "better": "lower"}
+  },
+  {
+    "name": "checkpoint-save-torch251",
+    "group": "training",
+    "description": "torch.save of a GPT-2-large training state (fp32 + AdamW, 9.3 GB), Torch 2.5.1: pageable GPU->CPU copy per tensor, up to 257 MB. In-memory file, so the disk is not measured. Torch 2.5.1 has no Blackwell (sm_120) code: the torch251 entries stop with that reason there.",
+    "needs": {"gpu_gib": 12, "host_gib": 16, "disk_gib": 6},
+    "setup": ["bash", "evaluation/workloads/setup.sh", "torch251"],
+    "run": {"argv": ["${CMT_ENV_ROOT}/torch251/bin/python", "evaluation/workloads/checkpoint.py", "--op", "save", "--dir", "${CMT_ENV_ROOT}"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "checkpoint_save_seconds", "unit": "s", "better": "lower"}
+  },
+  {
+    "name": "checkpoint-load-torch251",
+    "group": "training",
+    "description": "torch.load(map_location='cuda') + load_state_dict of the same 9.3 GB state (nanoGPT resume), Torch 2.5.1: pageable CPU->GPU copy per tensor.",
+    "needs": {"gpu_gib": 20, "host_gib": 16, "disk_gib": 6},
+    "setup": ["bash", "evaluation/workloads/setup.sh", "torch251"],
+    "run": {"argv": ["${CMT_ENV_ROOT}/torch251/bin/python", "evaluation/workloads/checkpoint.py", "--op", "load", "--dir", "${CMT_ENV_ROOT}"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "checkpoint_load_seconds", "unit": "s", "better": "lower"}
+  },
+  {
+    "name": "checkpoint-async-torch251",
+    "group": "training",
+    "description": "torch.distributed.checkpoint.async_save (default writer) of the 9.3 GB state, Torch 2.5.1: blocking time to stage to CPU with pageable .to('cpu') copies.",
+    "needs": {"gpu_gib": 12, "host_gib": 16, "disk_gib": 16},
+    "setup": ["bash", "evaluation/workloads/setup.sh", "torch251"],
+    "run": {"argv": ["${CMT_ENV_ROOT}/torch251/bin/python", "evaluation/workloads/checkpoint.py", "--op", "async", "--dir", "${CMT_ENV_ROOT}"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "checkpoint_async_seconds", "unit": "s", "better": "lower"}
+  },
+  {
+    "name": "checkpoint-async-torch",
+    "group": "training",
+    "description": "The same async_save with Torch 2.14.1 (cu130), whose staging may differ from 2.5.1. Runs on Blackwell, unlike the torch251 entries.",
+    "needs": {"gpu_gib": 12, "host_gib": 16, "disk_gib": 16},
+    "setup": ["bash", "evaluation/workloads/setup.sh", "torch"],
+    "run": {"argv": ["${CMT_ENV_ROOT}/torch/bin/python", "evaluation/workloads/checkpoint.py", "--op", "async", "--dir", "${CMT_ENV_ROOT}"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "checkpoint_async_seconds", "unit": "s", "better": "lower"}
+  },
+  {
+    "name": "dataloader-imagenette",
+    "group": "training",
+    "description": "ResNet-50 training on Imagenette JPEGs, DataLoader default pin_memory=False: one 154 MB pageable CPU->GPU batch per step.",
+    "needs": {"gpu_gib": 20, "host_gib": 16, "disk_gib": 6},
+    "setup": ["bash", "evaluation/workloads/setup.sh", "torch", "imagenette"],
+    "run": {"argv": ["${CMT_ENV_ROOT}/torch/bin/python", "evaluation/workloads/vision_train.py", "--pin-memory", "0"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "images_per_second", "unit": "images/s", "better": "higher"}
+  },
+  {
+    "name": "dataloader-imagenette-pinned",
+    "group": "training",
+    "description": "Reference for dataloader-imagenette: pin_memory=True (torchvision reference recipe). Batches are pinned, so the hook should change nothing.",
+    "needs": {"gpu_gib": 20, "host_gib": 16, "disk_gib": 6},
+    "setup": ["bash", "evaluation/workloads/setup.sh", "torch", "imagenette"],
+    "run": {"argv": ["${CMT_ENV_ROOT}/torch/bin/python", "evaluation/workloads/vision_train.py", "--pin-memory", "1"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "images_per_second", "unit": "images/s", "better": "higher"}
+  },
+  {
+    "name": "activation-offload",
+    "group": "training",
+    "description": "ResNet-152 training, batch 128, with torch.autograd.graph.save_on_cpu() (default pin_memory=False): every saved activation goes GPU->CPU and back, pageable.",
+    "needs": {"gpu_gib": 12, "host_gib": 24, "disk_gib": 6},
+    "setup": ["bash", "evaluation/workloads/setup.sh", "torch", "imagenette"],
+    "run": {"argv": ["${CMT_ENV_ROOT}/torch/bin/python", "evaluation/workloads/vision_train.py", "--model", "resnet152", "--batch", "128", "--pin-memory", "1", "--offload-activations", "cpu", "--steps", "15"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "images_per_second", "unit": "images/s", "better": "higher"}
+  },
+  {
+    "name": "tensors-torch",
+    "group": "data",
+    "description": "PyTorch x.to('cuda') and y.cpu() of pageable tensors, 16 MB / 256 MB / 1 GB, 5 each per direction.",
+    "needs": {"gpu_gib": 4, "host_gib": 8, "disk_gib": 6},
+    "setup": ["bash", "evaluation/workloads/setup.sh", "torch"],
+    "run": {"argv": ["${CMT_ENV_ROOT}/torch/bin/python", "evaluation/workloads/tensors.py", "--framework", "torch"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "copy_seconds", "unit": "s", "better": "lower"}
+  },
+  {
+    "name": "tensors-jax",
+    "group": "data",
+    "description": "JAX jax.device_put(numpy) and np.asarray(jax.Array), 16 MB / 256 MB / 1 GB, 5 each per direction.",
+    "needs": {"gpu_gib": 4, "host_gib": 8, "disk_gib": 5},
+    "setup": ["bash", "evaluation/workloads/setup.sh", "jax"],
+    "run": {"argv": ["${CMT_ENV_ROOT}/jax/bin/python", "evaluation/workloads/tensors.py", "--framework", "jax"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "copy_seconds", "unit": "s", "better": "lower"}
+  },
+  {
+    "name": "cudf-polars-pdsh",
+    "group": "data",
+    "description": "cudf-polars PDS-H SF10 queries 1,3,9,13,18,21, streaming engine with a 2 GiB device budget (spills to its default pinned host pool); parquet input and spill copies both ways.",
+    "needs": {"gpu_gib": 8, "host_gib": 16, "disk_gib": 8},
+    "setup": ["bash", "evaluation/workloads/setup.sh", "cudf", "pdsh-sf10"],
+    "run": {"argv": ["${CMT_ENV_ROOT}/cudf/bin/python", "evaluation/workloads/cudf_pdsh.py"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "query_seconds", "unit": "s", "better": "lower"}
+  }
+]

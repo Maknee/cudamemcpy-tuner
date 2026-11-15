@@ -1,0 +1,16 @@
+HTTP/2 200 
+date: Wed, 11 Nov 2026 06:40:22 GMT
+content-type: application/json
+access-control-allow-origin: *
+cache-control: no-store
+content-disposition: attachment; filename="tune.json"
+etag: W/"173a3d23efd09231e040"
+referrer-policy: strict-origin-when-cross-origin
+vary: accept-encoding
+x-content-type-options: nosniff
+x-frame-options: DENY
+x-machine: RTX 5090 - Xeon 8481C
+cf-cache-status: DYNAMIC
+server: cloudflare
+alt-svc: h3=":443"; ma=86400
+

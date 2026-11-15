@@ -1,0 +1,135 @@
+[
+  {
+    "name": "llama-moe-prefill",
+    "group": "personal",
+    "description": "llama.cpp llama-bench, Qwen3.6-35B-A3B Q8_0 (36.9 GB, larger than the GPU) with -ngl 99 -ot exps=CPU: experts stay in the mmap'd file and are copied pageable HtoD for every prompt batch. Metric: prompt processing pp2048.",
+    "needs": {"gpu_gib": 8, "host_gib": 44, "disk_gib": 40},
+    "setup": ["/usr/bin/python3", "evaluation/workloads/llama_cpp.py", "setup", "moe-prefill"],
+    "run": {"argv": ["/usr/bin/python3", "evaluation/workloads/llama_cpp.py", "run", "moe-prefill"], "env": {}},
+    "trace": {"argv": ["/usr/bin/python3", "evaluation/workloads/llama_cpp.py", "exec", "moe-prefill"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "prefill", "unit": "tokens/s", "better": "higher"}
+  },
+  {
+    "name": "llama-load-mmap",
+    "group": "personal",
+    "description": "llama.cpp llama-completion startup (default mmap), Qwen3.8-27B UD-Q4_K_XL (17.6 GB) fully on the GPU, file in the page cache: weights are copied pageable HtoD from the mapping. Metric: launch to exit for a 4-token reply.",
+    "needs": {"gpu_gib": 22, "host_gib": 22, "disk_gib": 20},
+    "setup": ["/usr/bin/python3", "evaluation/workloads/llama_cpp.py", "setup", "load-mmap"],
+    "run": {"argv": ["/usr/bin/python3", "evaluation/workloads/llama_cpp.py", "run", "load-mmap"], "env": {}},
+    "trace": {"argv": ["/usr/bin/python3", "evaluation/workloads/llama_cpp.py", "exec", "load-mmap"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "startup", "unit": "s", "better": "lower"}
+  },
+  {
+    "name": "llama-load-nommap",
+    "group": "personal",
+    "description": "The same startup with --no-mmap: llama.cpp reads the file into its own pinned staging buffers, so copies are pinned (control; the hook is expected to change nothing).",
+    "needs": {"gpu_gib": 22, "host_gib": 22, "disk_gib": 20},
+    "setup": ["/usr/bin/python3", "evaluation/workloads/llama_cpp.py", "setup", "load-nommap"],
+    "run": {"argv": ["/usr/bin/python3", "evaluation/workloads/llama_cpp.py", "run", "load-nommap"], "env": {}},
+    "trace": {"argv": ["/usr/bin/python3", "evaluation/workloads/llama_cpp.py", "exec", "load-nommap"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "startup", "unit": "s", "better": "lower"}
+  },
+  {
+    "name": "diffusers-flux2-klein",
+    "group": "personal",
+    "description": "diffusers FLUX.2 [klein] 4B, the model card example with enable_model_cpu_offload(), 1024x1024, 4 steps: every image moves text encoder, DiT and VAE pageable HtoD and back DtoH. Metric: mean of 3 images after a warm-up image.",
+    "needs": {"gpu_gib": 14, "host_gib": 24, "disk_gib": 20},
+    "setup": ["/usr/bin/python3", "evaluation/workloads/diffusers_offload.py", "setup"],
+    "run": {"argv": ["/usr/bin/python3", "evaluation/workloads/diffusers_offload.py", "run", "flux2-klein"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "image_time", "unit": "s/image", "better": "lower"}
+  },
+  {
+    "name": "diffusers-flux2-klein-group",
+    "group": "personal",
+    "description": "The same FLUX.2 [klein] 4B call with the pipeline's enable_group_offload(block_level, 1 block per group), use_stream left at its default False: every step copies each block pageable HtoD before it runs and back DtoH after. Metric: mean of 3 images after a warm-up image.",
+    "needs": {"gpu_gib": 8, "host_gib": 24, "disk_gib": 20},
+    "setup": ["/usr/bin/python3", "evaluation/workloads/diffusers_offload.py", "setup"],
+    "run": {"argv": ["/usr/bin/python3", "evaluation/workloads/diffusers_offload.py", "run", "flux2-klein-group"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "image_time", "unit": "s/image", "better": "lower"}
+  },
+  {
+    "name": "diffusers-sdxl-sequential",
+    "group": "personal",
+    "description": "diffusers SDXL base 1.0 fp16 with enable_sequential_cpu_offload() (lowest-VRAM recipe), 1024x1024, 50 steps: every forward copies each leaf module's weights pageable HtoD (5 GB of UNet per step). Metric: mean of 3 images after a warm-up image.",
+    "needs": {"gpu_gib": 6, "host_gib": 12, "disk_gib": 10},
+    "setup": ["/usr/bin/python3", "evaluation/workloads/diffusers_offload.py", "setup"],
+    "run": {"argv": ["/usr/bin/python3", "evaluation/workloads/diffusers_offload.py", "run", "sdxl"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "image_time", "unit": "s/image", "better": "lower"}
+  },
+  {
+    "name": "zimage-sdnext",
+    "group": "personal",
+    "description": "SD.Next 6657d06 server, Z-Image-Turbo bf16 txt2img through its API, 1024x1024, 9 steps, with no offload flags: SD.Next picks balanced offload for the detected VRAM, and on a 24 GB card every image still copies the text encoder, DiT and VAE pageable HtoD (20.4 GB, mostly 16-256 MB tensors) and back DtoH (20.4 GB). Metric: median of 3 images after a first image.",
+    "needs": {"gpu_gib": 12, "host_gib": 32, "disk_gib": 40},
+    "setup": ["/usr/bin/python3", "evaluation/workloads/zimage.py", "setup", "sdnext"],
+    "run": {"argv": ["/usr/bin/python3", "evaluation/workloads/zimage.py", "run", "sdnext"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "image_time", "unit": "s/image", "better": "lower"}
+  },
+  {
+    "name": "zimage-diffsynth",
+    "group": "personal",
+    "description": "DiffSynth-Studio 08fdc0d, its Z-Image-Turbo low-VRAM example as published (bf16, 1024x1024, 8 steps, vram_limit = GPU memory - 0.5 GiB). No smaller limit is needed: on a 24 GB card every image still copies the text encoder, DiT and VAE pageable HtoD (20.5 GB, mostly 16-256 MB tensors) and offloads them DtoH (20.5 GB). Metric: median of 3 images after a first image.",
+    "needs": {"gpu_gib": 12, "host_gib": 32, "disk_gib": 40},
+    "setup": ["/usr/bin/python3", "evaluation/workloads/zimage.py", "setup", "diffsynth"],
+    "run": {"argv": ["/usr/bin/python3", "evaluation/workloads/zimage.py", "run", "diffsynth"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "image_time", "unit": "s/image", "better": "lower"}
+  },
+  {
+    "name": "oceananigans-3d-output",
+    "group": "personal",
+    "description": "Oceananigans 0.117.1 ocean wind-mixing example on the GPU, 256x256x128, whole 3D fields saved every simulated minute (JLD2): each save copies every field GPU->host pageable (64 MiB each). Metric: run! time after JIT warm-up.",
+    "needs": {"gpu_gib": 12, "host_gib": 8, "disk_gib": 12},
+    "setup": ["/usr/bin/python3", "evaluation/workloads/oceananigans.py", "setup"],
+    "run": {"argv": ["/usr/bin/python3", "evaluation/workloads/oceananigans.py", "run"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "simulation_time", "unit": "s", "better": "lower"}
+  },
+  {
+    "name": "gs-3dgs-cpu",
+    "group": "personal",
+    "description": "3D Gaussian Splatting train.py (graphdeco-inria), T&T train scene, 7,000 iterations, --data_device cpu (README low-VRAM option): one ~8 MB training image copied pageable HtoD per iteration. Metric: whole training run.",
+    "needs": {"gpu_gib": 12, "host_gib": 8, "disk_gib": 10},
+    "setup": ["/usr/bin/python3", "evaluation/workloads/gaussian_splatting.py", "setup"],
+    "run": {"argv": ["/usr/bin/python3", "evaluation/workloads/gaussian_splatting.py", "run", "cpu"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "train_time", "unit": "s", "better": "lower"}
+  },
+  {
+    "name": "gs-3dgs-gpu",
+    "group": "personal",
+    "description": "The same 3DGS training with the default --data_device cuda: images are copied to the GPU once at load (2.4 GiB pageable HtoD), then no copies (control).",
+    "needs": {"gpu_gib": 14, "host_gib": 8, "disk_gib": 10},
+    "setup": ["/usr/bin/python3", "evaluation/workloads/gaussian_splatting.py", "setup"],
+    "run": {"argv": ["/usr/bin/python3", "evaluation/workloads/gaussian_splatting.py", "run", "gpu"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "train_time", "unit": "s", "better": "lower"}
+  },
+  {
+    "name": "sb3-atari-ppo",
+    "group": "personal",
+    "description": "Stable-Baselines3 PPO CnnPolicy on Breakout (8 envs, zoo hyperparameters), policy on the GPU, 100k env steps: each 256-sample minibatch of stacked uint8 frames is a 6.9 MiB NumPy array copied pageable HtoD. Metric: env steps/s during learn().",
+    "needs": {"gpu_gib": 4, "host_gib": 8, "disk_gib": 8},
+    "setup": ["/usr/bin/python3", "evaluation/workloads/sb3_atari.py", "setup"],
+    "run": {"argv": ["/usr/bin/python3", "evaluation/workloads/sb3_atari.py", "run"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "throughput", "unit": "env steps/s", "better": "higher"}
+  },
+  {
+    "name": "nanogpt-resume",
+    "group": "personal",
+    "description": "nanoGPT train.py config/finetune_shakespeare.py --init_from=resume (gpt2-large; gpt2-xl does not fit 24 GB), 10 iterations: torch.load(map_location='cuda') of a 9.3 GB checkpoint copies every tensor pageable HtoD, load_state_dict copies the model DtoH and back. Setup needs the GPU once to write the checkpoint. Metric: whole run.",
+    "needs": {"gpu_gib": 20, "host_gib": 20, "disk_gib": 20},
+    "setup": ["/usr/bin/python3", "evaluation/workloads/nanogpt_resume.py", "setup"],
+    "run": {"argv": ["/usr/bin/python3", "evaluation/workloads/nanogpt_resume.py", "run"], "env": {}},
+    "repeats": 3,
+    "metric": {"name": "resume_run", "unit": "s", "better": "lower"}
+  }
+]

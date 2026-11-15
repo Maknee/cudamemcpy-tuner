@@ -1,0 +1,21 @@
+SPDX-License-Identifier: GPL-2.0-only
+Copyright the cudamemcpy-tuner authors.
+Host-memory registration optimizations: B: this release already releases pages with one
+NV_UNPIN_USER_PAGES_DIRTY call; B only refuses to build when that would not be unpin_user_pages_dirty_lock.
+NVIDIA open-gpu-kernel-modules 620.70.06, commit e6a2e01579fbbd1ca2ed43fef2ee2589e9bd8bd9.
+
+--- a/nvidia/os-mlock.c
++++ b/nvidia/os-mlock.c
+@@ -313,6 +313,12 @@
+     return NV_OK;
+ }
+ 
++// Host-registration patch B: pages pinned by patch A are FOLL_PIN pins and
++// must be released by the unpin_user_pages*() API, never by put_page().
++#if !defined(NV_PIN_USER_PAGES_PRESENT) || defined(NV_BSD)
++#error "host-registration patch B requires pin_user_pages() (NV_PIN_USER_PAGES_PRESENT)"
++#endif
++
+ NV_STATUS NV_API_CALL os_unlock_user_pages(
+     NvU64  page_count,
+     void  *page_array,

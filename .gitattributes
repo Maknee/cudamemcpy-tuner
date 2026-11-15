@@ -1,0 +1,4 @@
+# Byte-exact files: no end-of-line conversion, whatever a contributor's core.autocrlf says.
+# headers.txt is a test fixture compared byte for byte; patches must apply to NVIDIA's sources unchanged.
+tests/fixtures/closest/headers.txt -text
+*.patch -text

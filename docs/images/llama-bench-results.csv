@@ -1,0 +1,17 @@
+configuration,invocation,tokens_per_second,stddev,repetitions
+Stock,1,346.10,3.87,3
+Stock,2,359.88,1.80,3
+Stock,3,354.32,1.67,3
+Stock,4,354.06,1.68,3
+Existing full tune,1,411.83,1.23,3
+Existing full tune,2,410.76,1.37,3
+Existing full tune,3,410.57,0.17,3
+Existing full tune,4,412.44,1.47,3
+Manual 16-thread tune,1,475.27,2.42,3
+Manual 16-thread tune,2,475.33,1.91,3
+Manual 16-thread tune,3,478.65,2.52,3
+Manual 16-thread tune,4,479.18,2.76,3
+cmt tune (quick),1,433.69,1.87,3
+cmt tune (quick),2,434.84,1.43,3
+cmt tune (quick),3,433.14,1.22,3
+cmt tune (quick),4,434.78,1.91,3

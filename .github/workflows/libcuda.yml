@@ -1,0 +1,179 @@
+# The hook against NVIDIA's real x86_64 libcuda binaries, which ci.yml leaves out. No GPU and no kernel module:
+# libcuda is only scanned, or loaded into a process that never calls cuInit. aarch64 is not checked here.
+#
+#   pinned        cmt-sigscan verify: src/gen/versions_db.inc regenerates unchanged from the libcuda files
+#                 tools/sigscan/drivers.manifest pins (SHA-256 at every step; installers are never run). Then the hook
+#                 is preloaded into a process that loads each pinned x86_64 libcuda: the row must be selected, every
+#                 patch site must pass the hook's own byte check and patch, every driver API symbol must resolve.
+#   latest        Every x86_64 NVIDIA Linux driver release (signed apt index and the download.nvidia.com listing)
+#                 must have a row (tools/libcuda_check.py says which releases count). A release without one fails
+#                 the run and the job summary prints the manifest line to add, or why the scanner rejects it.
+#                 Scheduled and manual runs only: a new NVIDIA release must not fail an unrelated push or pull
+#                 request.
+#
+# A failed scheduled run is how a maintainer hears of a new release (GitHub notifies whoever last changed the cron
+# line). GitHub disables schedules in a public repository after 60 days without commits; re-enable it in the Actions
+# tab.
+name: libcuda
+
+on:
+  schedule:
+    - cron: '23 6 * * 1'  # weekly; NVIDIA ships a few releases a month
+  workflow_dispatch:
+  # Changes to the hook, what it links, the tables or the checks themselves. Keep both lists the same.
+  push:
+    branches: [main]
+    paths:
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'src/gen/**'
+      - 'src/cuda/**'
+      - 'src/arch/**'
+      - 'src/common/**'
+      - 'src/copying/**'
+      - 'src/config.*'
+      - 'src/context.*'
+      - 'src/loader*'
+      - 'src/hook*'
+      - 'tools/sigscan/**'
+      - 'tools/libcuda_check.py'
+      - '.github/workflows/libcuda.yml'
+  pull_request:
+    paths:
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'src/gen/**'
+      - 'src/cuda/**'
+      - 'src/arch/**'
+      - 'src/common/**'
+      - 'src/copying/**'
+      - 'src/config.*'
+      - 'src/context.*'
+      - 'src/loader*'
+      - 'src/hook*'
+      - 'tools/sigscan/**'
+      - 'tools/libcuda_check.py'
+      - '.github/workflows/libcuda.yml'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: libcuda-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  SIGSCAN: build/sigscan/release/cmt-sigscan
+  DRIVERS: tmp/drivers  # cmt-sigscan's default cache (gitignored)
+
+jobs:
+  pinned:
+    name: pinned libcuda (tables, x86_64 load)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8  # v1
+        with:
+          toolchain: 1.89.0
+
+      - name: Cache cargo registry
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: libcuda-cargo-${{ hashFiles('tools/sigscan/Cargo.lock') }}
+
+      # Only the extracted libcuda files (~6 GB, ~0.6 GB compressed). An older key restores whatever still matches:
+      # fetch keeps a cached file only if its SHA-256 is the manifest's.
+      - name: Restore libcuda files
+        id: drivers
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: tmp/drivers
+          key: libcuda-drivers-${{ hashFiles('tools/sigscan/drivers.manifest') }}
+          restore-keys: libcuda-drivers-
+
+      - name: Build cmt-sigscan
+        run: cargo build --release --locked --manifest-path tools/sigscan/Cargo.toml --target-dir build/sigscan
+
+      # Four packages at a time, each deleted once its libcuda is extracted and verified: the disk holds the libcuda
+      # files, never all the packages (~12 GB). Survey rows feed no table and are skipped.
+      - name: Fetch the pinned libcuda files
+        id: fetch
+        run: |
+          "$SIGSCAN" list --arch x86_64 | awk '$3 != "survey" { print $1, $2 }' > pinned.txt
+          # shellcheck disable=SC2016 # the sh -c script expands $0, $1 and the exported variables itself
+          xargs -P 4 -n 2 sh -c '"$SIGSCAN" fetch --arch "$0" --versions "$1" && rm -rf "$DRIVERS/$0/$1/pkg"' < pinned.txt
+          # Drop versions the manifest no longer pins, so the saved cache does not grow with them.
+          for dir in "$DRIVERS"/*/*/; do
+            grep -qxF "$(basename "$(dirname "$dir")") $(basename "$dir")" pinned.txt || rm -rf "$dir"
+          done
+          du -sh "$DRIVERS"
+
+      # Saved from main and scheduled runs only: a pull request that pins a new release fetches it each run.
+      - name: Save libcuda files
+        if: >
+          always() && github.event_name != 'pull_request' && steps.fetch.outcome == 'success'
+          && steps.drivers.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: tmp/drivers
+          key: ${{ steps.drivers.outputs.cache-primary-key }}
+
+      - name: Tables equal the scanner's output for the pinned files
+        run: '"$SIGSCAN" verify --arch x86_64'
+
+      # CMT_HOOK_ONLY: the preload hook without CUDA, the library the load check needs. CMT_WERROR also makes the
+      # hook's own warnings errors.
+      - name: Build the hook
+        run: |
+          cmake -S . -B build/hook -DCMAKE_BUILD_TYPE=Release -DCMT_HOOK_ONLY=ON -DCMT_BUILD_TESTS=OFF \
+            -DCMT_BUILD_BENCHMARKS=OFF -DCMT_WERROR=ON
+          cmake --build build/hook --parallel 4 --target cmt_hook
+
+      - name: The hook loads and patches every pinned x86_64 libcuda
+        run: python3 tools/libcuda_check.py load --hook build/hook/libcmt_hook.so --drivers "$DRIVERS"
+
+  latest:
+    name: newest NVIDIA releases
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8  # v1
+        with:
+          toolchain: 1.89.0
+
+      - name: Cache cargo registry
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: libcuda-cargo-${{ hashFiles('tools/sigscan/Cargo.lock') }}
+
+      - name: Build cmt-sigscan
+        run: cargo build --release --locked --manifest-path tools/sigscan/Cargo.toml --target-dir build/sigscan
+
+      # Exit 1: a release needs a row (the summary says which and how); exit 2: the check could not run.
+      - name: Every release has a row
+        env:
+          GITHUB_TOKEN: ${{ github.token }}  # read-only; only for the open-gpu-kernel-modules tag list's rate limit
+        run: >
+          python3 tools/libcuda_check.py latest --arch x86_64 --sigscan "$SIGSCAN" --work "$RUNNER_TEMP/libcuda"
+          --summary "$GITHUB_STEP_SUMMARY"

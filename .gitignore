@@ -1,0 +1,25 @@
+# Build trees, scratch space, measured runs and local environments: never committed.
+/build*/
+/dist/
+/tmp/
+/results/
+/env/
+# Compiler caches, compilation databases and editor state.
+.ccache/
+.cache/
+compile_commands.json
+.vscode/
+.idea/
+# Python bytecode and lint caches.
+__pycache__/
+.ruff_cache/
+# Built or downloaded binaries, wherever they land.
+*.so
+*.so.*
+*.a
+*.o
+*.deb
+*.run
+# Rust build output; the Cargo.lock files are tracked.
+/tools/sigscan/target/
+/evaluation/target/

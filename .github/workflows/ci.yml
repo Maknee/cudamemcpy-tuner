@@ -1,0 +1,148 @@
+# Build and test on every pull request and push, with CUDA 12.9 (the release build, also packaged) and 13.0, and a
+# Debug build. The package is checked on every run and kept as a workflow artifact on pushes; it is not published.
+#
+# Hosted runners have no GPU: the gpu and kmod tests skip (exit 77), everything else runs against the fake libcuda.
+# The drivers tests need the pinned libcuda downloads and are left out; libcuda.yml checks the tables against them.
+# CUDA comes from NVIDIA's apt repository at pinned versions (.github/scripts/install_cuda.sh).
+#
+# Publishing releases is off. To turn it back on, add a job after `build` with `contents: write` that downloads the
+# `package` artifact (actions/download-artifact, pinned like the actions below) and runs, for a v* tag,
+#   gh release create "$GITHUB_REF_NAME" cmt-*.tar.gz* --verify-tag --title "$GITHUB_REF_NAME" --generate-notes
+# and give only that job write access. The package already carries the license texts (licenses/, see
+# .github/scripts/package.sh).
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# bash -eo pipefail: a failure anywhere in a pipeline fails the step.
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: CUDA ${{ matrix.cuda }} ${{ matrix.build_type }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The shipped build: release binaries need driver 525+ (CUDA 12 minor-version compatibility).
+          - cuda: '12.9'
+            build_type: Release
+            package: true
+          - cuda: '13.0'
+            build_type: Release
+            package: false
+          - cuda: '12.9'
+            build_type: Debug
+            package: false
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 500M
+      CUDA_VERSION: ${{ matrix.cuda }}
+      CUDA_ROOT: /usr/local/cuda-${{ matrix.cuda }}
+      BUILD_TYPE: ${{ matrix.build_type }}
+      # Also the parallelism of the patch assembler's nested build (an ExternalProject).
+      CMAKE_BUILD_PARALLEL_LEVEL: 4
+      # The oldest system the release package starts on: Ubuntu 22.04's glibc 2.35 and GCC 12's libstdc++
+      # (cmt, gpu_copy and cpu_loops link libstdc++ dynamically; the hook libraries carry their own).
+      GLIBC_FLOOR: '2.35'
+      GLIBCXX_FLOOR: '3.4.30'
+      CXXABI_FLOOR: '1.3.13'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install CUDA ${{ matrix.cuda }}
+        run: |
+          bash .github/scripts/install_cuda.sh "$CUDA_VERSION"
+          echo "$CUDA_ROOT/bin" >> "$GITHUB_PATH"
+
+      - name: Install ninja, ccache, matplotlib
+        run: sudo apt-get install -y -q --no-install-recommends ninja-build ccache python3-matplotlib
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8  # v1
+        with:
+          toolchain: 1.89.0
+
+      # Pinned FetchContent sources and their download stamps: a reconfigure with them needs no network.
+      - name: Cache FetchContent sources
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            build/_deps/*-src
+            build/_deps/*-subbuild
+          key: ci-deps-${{ hashFiles('CMakeLists.txt', 'cmake/*.cmake') }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: ci-cargo-${{ hashFiles('evaluation/Cargo.lock', 'tools/sigscan/Cargo.lock') }}
+
+      # Restored everywhere, saved only from main (below): pull requests do not fill the shared cache quota.
+      - name: Restore ccache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: .ccache
+          key: ci-ccache-${{ matrix.cuda }}-${{ matrix.build_type }}-${{ github.sha }}
+          restore-keys: ci-ccache-${{ matrix.cuda }}-${{ matrix.build_type }}-
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+          -DCUDAToolkit_ROOT="$CUDA_ROOT"
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          -DCMT_BUILD_TESTS=ON -DCMT_BUILD_EVALUATION=ON -DCMT_BUILD_SIGSCAN=ON -DCMT_WERROR=ON
+
+      - name: Build
+        run: cmake --build build --parallel 4
+
+      - name: Save ccache
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: .ccache
+          key: ci-ccache-${{ matrix.cuda }}-${{ matrix.build_type }}-${{ github.sha }}
+
+      - name: Test
+        run: ctest --test-dir build -LE drivers --output-on-failure --parallel 4
+
+      - name: Shared tunes pass cmt check
+        env:
+          CMT_INTERNAL_ENABLE: "1"
+        run: find tunes -name '*.json' -print0 | xargs -0 -r -n1 build/cmt check
+
+      # Named after the tag for a v* tag, else after the commit.
+      - name: Package
+        if: matrix.package
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then version=$GITHUB_REF_NAME; else version=${GITHUB_SHA::7}; fi
+          bash .github/scripts/package.sh build "cmt-$version-linux-$(uname -m)-cuda12" dist
+
+      - name: Upload the package
+        if: matrix.package && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: package
+          path: dist/cmt-*.tar.gz*
+          if-no-files-found: error
+          retention-days: 7

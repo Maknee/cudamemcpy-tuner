@@ -1,0 +1,13 @@
+[application]
+name = "cudamemcpy-site"
+
+[web.app]
+title = "cudamemcpy"
+
+[web]
+# Cloudflare serves/compresses the ordinary files; avoid duplicate compressed assets.
+pre_compress = false
+
+[web.wasm_opt]
+level = "z"
+debug = false

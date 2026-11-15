@@ -1,0 +1,31 @@
+[package]
+name = "cmt-sigscan"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+publish = false
+
+# Standalone crate; do not join the parent workspace up the tree.
+[workspace]
+
+[dependencies]
+anyhow = "=1.0.104"
+ar = "=0.9.0"
+capstone = { version = "=0.14.0", default-features = false, features = ["std", "full", "arch_x86", "arch_arm64"] }
+clap = { version = "=4.5.58", features = ["derive"] }
+flate2 = "=1.1.9"
+gimli = { version = "=0.32.3", default-features = false, features = ["read", "std"] }
+object = { version = "=0.37.3", default-features = false, features = ["read", "elf", "std"] }
+regex = "=1.12.3"
+reqwest = { version = "=0.12.28", default-features = false, features = ["blocking", "rustls-tls"] }
+sha2 = "=0.10.9"
+tar = "=0.4.45"
+tempfile = "=3.27.0"
+xz2 = "=0.1.7"
+zstd = "=0.13.3"
+
+[profile.release]
+debug = 1
+
+[lints.rust]
+unsafe_code = "forbid"

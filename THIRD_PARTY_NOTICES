@@ -1,0 +1,15 @@
+Third-party notices for cudamemcpy-tuner
+
+Release bundles include dependency license texts under licenses/: Abseil,
+Benchmark, Capstone, CLI11, expected, fmt, function2, indicators (and termcolor),
+PicoSHA2, simdjson, spdlog and unordered_dense. Dependency versions are pinned in
+cmake/Dependencies.cmake. Optional cmt-evaluate bundles also include Rust crate
+licenses under licenses/rust/; versions are pinned in evaluation/Cargo.lock.
+
+Keystone is used only by the build-time patch assembler and is not shipped.
+The NVIDIA CUDA runtime is distributed under the CUDA Toolkit license:
+https://docs.nvidia.com/cuda/eula/
+
+The NVIDIA kernel-module patches are GPL-2.0-only; their license is included at
+kernel_patches/nvidia-open/COPYING. The project's other source is Apache-2.0
+(LICENSE); third-party components retain their own licenses.

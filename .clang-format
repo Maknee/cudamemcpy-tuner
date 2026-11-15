@@ -1,0 +1,39 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Always
+NamespaceIndentation: None
+AccessModifierOffset: -4
+ColumnLimit: 110
+BreakBeforeBraces: Custom
+CompactNamespaces: false
+BraceWrapping:
+  AfterCaseLabel: true
+  AfterClass: true
+  AfterControlStatement: Always
+  AfterEnum: true
+  AfterExternBlock: true
+  AfterFunction: true
+  AfterNamespace: false
+  AfterObjCDeclaration: true
+  AfterStruct: true
+  AfterUnion: true
+  BeforeCatch: true
+  BeforeElse: true
+  BeforeLambdaBody: true
+  BeforeWhile: false
+  IndentBraces: false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+  SplitEmptyNamespace: true
+SortIncludes: Never
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortFunctionsOnASingleLine: None
+ReflowComments: false
+AlwaysBreakTemplateDeclarations: Yes
+AttributeMacros: [__host__, __device__]
+
+SeparateDefinitionBlocks: Always
+PointerAlignment: Left
+
+InsertBraces: true

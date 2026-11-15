@@ -1,0 +1,37 @@
+SPDX-License-Identifier: GPL-2.0-only
+Copyright the cudamemcpy-tuner authors.
+Host-memory registration optimizations: B: release pinned pages with one unpin_user_pages_dirty_lock call.
+Refuses to build without pin_user_pages() (no FOLL_GET fallback).
+NVIDIA open-gpu-kernel-modules 570.195.03, commit b8c77a9a62ba4874a6a302ee30dc65c6d2cfadf9.
+
+--- a/nvidia/os-mlock.c
++++ b/nvidia/os-mlock.c
+@@ -300,6 +300,12 @@
+     return NV_OK;
+ }
+ 
++// Host-registration patch B: pages pinned by patch A are FOLL_PIN pins and
++// must be released by the unpin_user_pages*() API, never by put_page().
++#if !defined(NV_PIN_USER_PAGES_PRESENT) || defined(NV_BSD)
++#error "host-registration patch B requires pin_user_pages() (NV_PIN_USER_PAGES_PRESENT)"
++#endif
++
+ NV_STATUS NV_API_CALL os_unlock_user_pages(
+     NvU64  page_count,
+     void  *page_array,
+@@ -308,14 +314,8 @@
+ {
+     NvBool write = FLD_TEST_DRF(_LOCK_USER_PAGES, _FLAGS, _WRITE, _YES, flags);
+     struct page **user_pages = page_array;
+-    NvU32 i;
+ 
+-    for (i = 0; i < page_count; i++)
+-    {
+-        if (write)
+-            set_page_dirty_lock(user_pages[i]);
+-        NV_UNPIN_USER_PAGE(user_pages[i]);
+-    }
++    unpin_user_pages_dirty_lock(user_pages, page_count, write);
+ 
+     os_free_mem(user_pages);
+ 

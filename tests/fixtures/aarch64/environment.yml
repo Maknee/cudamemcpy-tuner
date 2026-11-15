@@ -1,0 +1,25 @@
+# Cross compiler for the aarch64 (Grace / GH200) build of hook/, from conda-forge only. Pinned by version and build.
+#
+#   mamba env create -f tests/fixtures/aarch64/environment.yml -n cmt-aarch64
+#   cmake -S . -B tmp/build-aarch64 -DCMAKE_TOOLCHAIN_FILE=tests/fixtures/aarch64/toolchain.cmake \
+#         -DCMT_HOOK_ONLY=ON -DMEMCPY_HOOK_WERROR=ON
+#
+# Why each package:
+#   gxx_linux-aarch64      GCC 13, the same major version as the x86-64 build host (Ubuntu 24.04, GCC 13.3), so the
+#                          two builds see the same warnings. Brings binutils (readelf, objdump) for the checks.
+#   sysroot_linux-aarch64  glibc 2.28 headers and stubs. The hook then links only symbols that exist in glibc 2.28
+#                          (RHEL 8, Ubuntu 20.04 and later), older than any GH200 software stack, so the same .so loads
+#                          on every distribution NVIDIA supports Grace on. The base symbol version on aarch64 is
+#                          GLIBC_2.17 (the first glibc for the architecture), not x86-64's GLIBC_2.2.5.
+#   qemu-execve-aarch64    qemu user-mode emulation (qemu-aarch64). Runs the cross-compiled unit tests on the x86-64
+#                          host. It executes aarch64 instructions with the host's memory ordering and a coherent
+#                          instruction cache, so it proves the code runs and computes the right bytes; it cannot prove
+#                          the weak-memory or cache-maintenance parts (store_fence, __builtin___clear_cache). Optional:
+#                          without it the aarch64 tests are built and marked DISABLED.
+name: cmt-aarch64
+channels:
+  - conda-forge
+dependencies:
+  - gxx_linux-aarch64=13.4.0=heaab022_25
+  - sysroot_linux-aarch64=2.28=h585391f_9
+  - qemu-execve-aarch64=11.0.3=h546fcaf_9

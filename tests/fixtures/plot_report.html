@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CMT evaluation</title>
+<style>
+:root { --surface: #fcfcfb; --ink: #0b0b0b; --muted: #52514e; --rule: #e4e3df; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --surface: #1a1a19; --ink: #f0efec; --muted: #c3c2b7; --rule: #383835; }
+}
+:root[data-theme="dark"] { --surface: #1a1a19; --ink: #f0efec; --muted: #c3c2b7; --rule: #383835; }
+body { background: var(--surface); color: var(--ink); font: 15px/1.5 system-ui, sans-serif;
+       max-width: 1180px; margin: 0 auto; padding: 16px; }
+img { max-width: 100%; height: auto; border-radius: 6px; background: #fcfcfb; }
+table { border-collapse: collapse; margin: 8px 0 0; font-size: 13px; display: block; overflow-x: auto; }
+th, td { border-bottom: 1px solid var(--rule); padding: 3px 10px; text-align: left; }
+.muted, p { color: var(--muted); }
+section { margin: 28px 0; }
+</style></head><body>
+<h1>CMT evaluation: fixture-a</h1>
+<p>Fixture GPU · Fixture CPU · driver 1.0</p>
+<table><thead><tr><th>command</th><th>items</th></tr></thead><tbody><tr><td>bench/kernel/stock</td><td>30 complete, 6 refused; --min-bytes 1</td></tr><tr><td>bench/kernel/patched</td><td>36 complete; --min-bytes 1</td></tr></tbody></table><p class='muted'>Not measured yet: Driver references, Copy engine only, Inline vs DMA, CPU copy loops, Tuned settings vs the driver, 4K vs THP pages, Cached vs write-combined staging, Kernel tier, Workload copy sizes.</p>
+<p>In the graphs, a shaded band spans every sample behind a line (minimum to maximum over the
+processes), and a black × marks a point from an item measured under load (listed above).
+tune.json records no load per run, so the tuning graphs have no ×.</p>
+<section><h2>Registration cache: stock vs patched modules</h2><p>Pageable copies from THP buffers at the sizes progressive pinning runs (4 MiB, its first chunk, to 1 GiB, the default registration cap), median of every sample (3 processes of 2 each). Progressive pinning is the hook with the default request, audited as cmt tune audits it; on the stock modules the hook cannot pin, and the audited child refused in 6 of 6 processes (path/count mismatch), so there is no stock line unless one completed. pin_pipeline (register 32 MiB ahead of the copy, unpin at the end) runs on both modules: its gain from stock to patched is the patch's, not the algorithm's. The table: pin and unpin rates of the whole buffer, and pin + copy + unpin, at the largest size.</p><img src='regcache.png' alt='Registration cache: stock vs patched modules'><table><thead><tr><th>64M</th><th>stock GB/s</th><th>patched GB/s</th><th>patched / stock</th></tr></thead><tbody><tr><td>pin, 4K pages</td><td>6.0</td><td>9.0</td><td>1.50×</td></tr><tr><td>unpin, 4K pages</td><td>40.0</td><td>40.0</td><td>1.00×</td></tr><tr><td>pin, THP</td><td>50.0</td><td>50.0</td><td>1.00×</td></tr><tr><td>unpin, THP</td><td>40.0</td><td>40.0</td><td>1.00×</td></tr><tr><td>pin + copy + unpin, 4K pages, CPU → GPU</td><td>9.5</td><td>9.5</td><td>1.00×</td></tr><tr><td>pin + copy + unpin, 4K pages, GPU → CPU</td><td>9.5</td><td>9.5</td><td>1.00×</td></tr><tr><td>pin + copy + unpin, THP, CPU → GPU</td><td>9.5</td><td>9.5</td><td>1.00×</td></tr><tr><td>pin + copy + unpin, THP, GPU → CPU</td><td>9.5</td><td>9.5</td><td>1.00×</td></tr></tbody></table></section><section><h2>Workloads: stock vs hook</h2><p>Each dot is one run; the bar is the median; y starts at zero. The number under a name is the hook speedup: stock / hook median when lower is better, hook / stock when higher is better, so above 1 means the hook helped. "!" flags fewer runs than requested or unequal arms; such records are still drawn. A warm-up run of the stock command, when the runner recorded one, is listed but never in a median. The hook arm used tune/full/tune.json. Result: faster when the speedup is at least 1.05× and every hooked run beat every stock run; slower when it is at most 1/1.05× and every hooked run lost to every stock run; otherwise no clear change.</p><img src='workloads.png' alt='Workloads: stock vs hook'><table><thead><tr><th>workload</th><th>metric</th><th>better</th><th>stock median</th><th>hook median</th><th>hook speedup</th><th>result</th><th>runs stock/hook</th><th>warm-up (excluded)</th><th>flag</th></tr></thead><tbody><tr><td>w-rate</td><td>m</td><td>higher</td><td>105</td><td>111</td><td>1.057×</td><td>no clear change</td><td>3/3 of 3</td><td></td><td></td></tr><tr><td>w-time</td><td>m</td><td>lower</td><td>11</td><td>8.5</td><td>1.294×</td><td>faster</td><td>3/3 of 3</td><td></td><td></td></tr></tbody></table></section>
+</body></html>
